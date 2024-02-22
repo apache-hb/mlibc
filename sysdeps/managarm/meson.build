@@ -13,9 +13,19 @@ fs_bragi = bragi_gen.process('../../subprojects/managarm/protocols/fs/fs.bragi')
 posix_bragi = bragi_gen.process('../../subprojects/managarm/protocols/posix/posix.bragi')
 
 managarm_incl = include_directories(
-		'../../subprojects/managarm/protocols/posix/include',
-		'../../subprojects/managarm/hel/include',
-		'../../subprojects/bragi/include')
+		'../../subprojects/managarm/protocols/posix/include')
+
+bragi_dep = dependency('bragi', fallback : [ 'bragi', 'bragi_dep' ])
+hel_dep = dependency('hel', fallback : [ 'hel', 'hel_dep' ])
+
+libc_deps += [ hel_dep, bragi_dep ]
+rtdl_deps += [ hel_dep, bragi_dep ]
+
+helix_dep = dependency('helix', required : false, fallback : [ 'helix', 'helix_dep' ])
+if helix_dep.found()
+	libc_deps += [ helix_dep ]
+	rtdl_deps += [ helix_dep ]
+endif
 
 rtdl_include_dirs += managarm_incl
 rtdl_sources += files(
