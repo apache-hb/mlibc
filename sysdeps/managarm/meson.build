@@ -15,16 +15,13 @@ posix_bragi = bragi_gen.process('../../subprojects/managarm/protocols/posix/posi
 managarm_incl = include_directories(
 		'../../subprojects/managarm/protocols/posix/include')
 
-bragi_dep = dependency('bragi', fallback : [ 'bragi', 'bragi_dep' ])
-hel_dep = dependency('hel', fallback : [ 'hel', 'hel_dep' ])
+if not headers_only
+	bragi_dep = subproject('bragi').get_variable('bragi_dep')
+	hel_dep = dependency('hel')
+	helix_dep = dependency('helix')
 
-libc_deps += [ hel_dep, bragi_dep ]
-rtdl_deps += [ hel_dep, bragi_dep ]
-
-helix_dep = dependency('helix', required : false, fallback : [ 'helix', 'helix_dep' ])
-if helix_dep.found()
-	libc_deps += [ helix_dep ]
-	rtdl_deps += [ helix_dep ]
+	libc_deps += [ hel_dep, helix_dep, bragi_dep ]
+	rtdl_deps += [ hel_dep, helix_dep, bragi_dep ]
 endif
 
 rtdl_include_dirs += managarm_incl
