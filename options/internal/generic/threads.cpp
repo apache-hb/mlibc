@@ -7,12 +7,12 @@
 #include <mlibc/threads.hpp>
 #include <mlibc/tcb.hpp>
 
-extern "C" Tcb *__rtdl_allocateTcb();
+extern "C" Tcb *__rtld_allocateTcb();
 
 namespace mlibc {
 
 int thread_create(struct __mlibc_thread_data **__restrict thread, const struct __mlibc_threadattr *__restrict attrp, void *entry, void *__restrict user_arg, bool returns_int) {
-	auto new_tcb = __rtdl_allocateTcb();
+	auto new_tcb = __rtld_allocateTcb();
 	pid_t tid;
 	struct __mlibc_threadattr attr = {};
 	if (!attrp)
@@ -91,9 +91,6 @@ static constexpr unsigned int mutexErrorCheck = 2;
 // TODO: either use uint32_t or determine the bit based on sizeof(int).
 static constexpr unsigned int mutex_owner_mask = (static_cast<uint32_t>(1) << 30) - 1;
 static constexpr unsigned int mutex_waiters_bit = static_cast<uint32_t>(1) << 31;
-
-// Only valid for the internal __mlibc_m mutex of wrlocks.
-static constexpr unsigned int mutex_excl_bit = static_cast<uint32_t>(1) << 30;
 
 int thread_mutex_init(struct __mlibc_mutex *__restrict mutex,
 		const struct __mlibc_mutexattr *__restrict attr) {

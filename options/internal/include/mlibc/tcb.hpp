@@ -72,11 +72,11 @@ namespace mlibc {
 		       == (tcbCancelEnableBit | tcbCancelTriggerBit);
 	}
 
-#if !MLIBC_STATIC_BUILD && !MLIBC_BUILDING_RTDL
+#if !MLIBC_STATIC_BUILD && !MLIBC_BUILDING_RTLD
 	// In non-static builds, libc.so always has a TCB available.
 	constexpr bool tcb_available_flag = true;
 #else
-	// Otherwise this will be set to true after RTDL has initialized the TCB.
+	// Otherwise this will be set to true after RTLD has initialized the TCB.
 	extern bool tcb_available_flag;
 #endif
 }
@@ -155,6 +155,8 @@ struct Tcb {
 static_assert(offsetof(Tcb, stackCanary) == 0x28);
 // sysdeps/linux/x86_64/cp_syscall.S uses the offset of cancelBits.
 static_assert(offsetof(Tcb, cancelBits) == 0x30);
+// options/linker/x86_64/runtime.S uses the offset of dtvPointers.
+static_assert(offsetof(Tcb, dtvPointers) == 16);
 #elif defined(__i386__)
 // GCC expects the stack canary to be at gs:0x14.
 // The offset differs from x86_64 due to the change in the pointer size

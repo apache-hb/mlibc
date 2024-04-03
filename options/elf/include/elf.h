@@ -264,8 +264,8 @@ enum {
 	R_AARCH64_GLOB_DAT = 1025,
 	R_AARCH64_JUMP_SLOT = 1026,
 	R_AARCH64_RELATIVE = 1027,
-	R_AARCH64_TLS_DTPREL64 = 1028,
-	R_AARCH64_TLS_DTPMOD64 = 1029,
+	R_AARCH64_TLS_DTPMOD64 = 1028,
+	R_AARCH64_TLS_DTPREL64 = 1029,
 	R_AARCH64_TLS_TPREL64 = 1030,
 	R_AARCH64_TLSDESC = 1031,
 	R_AARCH64_IRELATIVE = 1032,
@@ -354,6 +354,7 @@ enum {
 	PT_HISUNW = 0x6fffffff,
 	PT_HIOS = 0x6fffffff,
 	PT_LOPROC = 0x70000000,
+	PT_ARM_EXIDX = 0x70000001,
 	PT_RISCV_ATTRIBUTES = 0x70000003,
 	PT_HIPROC = 0x7fffffff,
 };
@@ -655,9 +656,9 @@ typedef struct {
 #define AT_GID 13
 #define AT_EGID 14
 
-/* rtdl requires presence of some a_type (AT_*) values that are not standardized in the ELF spec */
+/* rtld requires presence of some a_type (AT_*) values that are not standardized in the ELF spec */
 #if !defined(AT_EXECFN) || !defined(AT_RANDOM) || !defined(AT_SECURE)
-#error "sysdeps' auxv.h is missing some defines that are required for rtdl operation"
+#error "sysdeps' auxv.h is missing some defines that are required for rtld operation"
 #endif
 
 #ifdef __cplusplus

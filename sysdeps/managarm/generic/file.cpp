@@ -179,6 +179,8 @@ int sys_symlinkat(const char *target_path, int dirfd, const char *link_path) {
 		return EBADF;
 	}else if(resp.error() == managarm::posix::Errors::NOT_A_DIRECTORY) {
 		return ENOTDIR;
+	}else if(resp.error() == managarm::posix::Errors::ALREADY_EXISTS) {
+		return EEXIST;
 	}else{
 		__ensure(resp.error() == managarm::posix::Errors::SUCCESS);
 		return 0;
@@ -1200,7 +1202,7 @@ int sys_epoll_pwait(int epfd, struct epoll_event *ev, int n,
 	req.set_size(n);
 	req.set_timeout(timeout > 0 ? int64_t{timeout} * 1000000 : timeout);
 	if(sigmask != NULL) {
-		req.set_sigmask((long int)*sigmask);
+		req.set_sigmask(*reinterpret_cast<const int64_t *>(sigmask));
 		req.set_sigmask_needed(true);
 	} else {
 		req.set_sigmask_needed(false);
@@ -1299,7 +1301,7 @@ int sys_signalfd_create(const sigset_t *masks, int flags, int *fd)  {
 	managarm::posix::CntRequest<MemoryAllocator> req(getSysdepsAllocator());
 	req.set_request_type(managarm::posix::CntReqType::SIGNALFD_CREATE);
 	req.set_flags(proto_flags);
-	req.set_sigset(*masks);
+	req.set_sigset(*reinterpret_cast<const uint64_t *>(masks));
 
 	auto [offer, send_req, recv_resp] = exchangeMsgsSync(
 		getPosixLane(),
@@ -1391,10 +1393,9 @@ int sys_eventfd_create(unsigned int initval, int flags, int *fd) {
 	SignalGuard sguard;
 
 	uint32_t proto_flags = 0;
-	if (flags & EFD_NONBLOCK) proto_flags |= managarm::posix::OpenFlags::OF_NONBLOCK;
-	if (flags & EFD_CLOEXEC) proto_flags |= managarm::posix::OpenFlags::OF_CLOEXEC;
-	if (flags & EFD_SEMAPHORE)
-		return ENOSYS;
+	if (flags & EFD_NONBLOCK) proto_flags |= managarm::posix::EventFdFlags::NONBLOCK;
+	if (flags & EFD_CLOEXEC) proto_flags |= managarm::posix::EventFdFlags::CLOEXEC;
+	if (flags & EFD_SEMAPHORE) proto_flags |= managarm::posix::EventFdFlags::SEMAPHORE;
 
 	managarm::posix::EventfdCreateRequest<MemoryAllocator> req(getSysdepsAllocator());
 	req.set_flags(proto_flags);
@@ -1447,14 +1448,14 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode, int *fd) {
 	if(flags & O_NOCTTY)
 		proto_flags |= managarm::posix::OpenFlags::OF_NOCTTY;
 
-	if(flags & O_RDONLY)
-		proto_flags |= managarm::posix::OpenFlags::OF_RDONLY;
-	else if(flags & O_WRONLY)
-		proto_flags |= managarm::posix::OpenFlags::OF_WRONLY;
-	else if(flags & O_RDWR)
-		proto_flags |= managarm::posix::OpenFlags::OF_RDWR;
-	else if(flags & O_PATH)
+	if(flags & O_PATH)
 		proto_flags |= managarm::posix::OpenFlags::OF_PATH;
+	else if((flags & O_ACCMODE) == O_RDONLY)
+		proto_flags |= managarm::posix::OpenFlags::OF_RDONLY;
+	else if((flags & O_ACCMODE) == O_WRONLY)
+		proto_flags |= managarm::posix::OpenFlags::OF_WRONLY;
+	else if((flags & O_ACCMODE) == O_RDWR)
+		proto_flags |= managarm::posix::OpenFlags::OF_RDWR;
 
 	managarm::posix::OpenAtRequest<MemoryAllocator> req(getSysdepsAllocator());
 	req.set_fd(dirfd);
@@ -1618,6 +1619,8 @@ int sys_read(int fd, void *data, size_t max_size, ssize_t *bytes_read) {
 		return EINVAL;
 	}else if(resp.error() == managarm::fs::Errors::WOULD_BLOCK) {
 		return EAGAIN;
+	}else if(resp.error() == managarm::fs::Errors::IS_DIRECTORY) {
+		return EISDIR;
 	}else if(resp.error() == managarm::fs::Errors::END_OF_FILE) {
 		*bytes_read = 0;
 		return 0;
@@ -2036,21 +2039,26 @@ int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags, struct stat
 }
 
 int sys_readlink(const char *path, void *data, size_t max_size, ssize_t *length) {
+	return sys_readlinkat(AT_FDCWD, path, data, max_size, length);
+}
+
+int sys_readlinkat(int dirfd, const char *path, void *data, size_t max_size, ssize_t *length) {
 	SignalGuard sguard;
 
-	managarm::posix::CntRequest<MemoryAllocator> req(getSysdepsAllocator());
-	req.set_request_type(managarm::posix::CntReqType::READLINK);
+	managarm::posix::ReadlinkAtRequest<MemoryAllocator> req(getSysdepsAllocator());
+	req.set_fd(dirfd);
 	req.set_path(frg::string<MemoryAllocator>(getSysdepsAllocator(), path));
 
-	auto [offer, send_req, recv_resp, recv_data] = exchangeMsgsSync(
+	auto [offer, send_head, send_tail, recv_resp, recv_data] = exchangeMsgsSync(
 		getPosixLane(),
 		helix_ng::offer(
-			helix_ng::sendBragiHeadOnly(req, getSysdepsAllocator()),
+			helix_ng::sendBragiHeadTail(req, getSysdepsAllocator()),
 			helix_ng::recvInline(),
 			helix_ng::recvBuffer(data, max_size))
 	);
 	HEL_CHECK(offer.error());
-	HEL_CHECK(send_req.error());
+	HEL_CHECK(send_head.error());
+	HEL_CHECK(send_tail.error());
 	HEL_CHECK(recv_resp.error());
 
 	managarm::posix::SvrResponse<MemoryAllocator> resp(getSysdepsAllocator());
@@ -2518,6 +2526,36 @@ int sys_unlockpt(int fd) {
 
 	if(int e = sys_ioctl(fd, TIOCSPTLCK, &unlock, NULL); e)
 		return e;
+
+	return 0;
+}
+
+int sys_getrlimit(int resource, struct rlimit *limit) {
+	switch(resource) {
+		case RLIMIT_NOFILE:
+			/* TODO: change this once we support more than 512 */
+			limit->rlim_cur = 512;
+			limit->rlim_max = 512;
+			return 0;
+		default:
+			return EINVAL;
+	}
+}
+
+int sys_sysconf(int num, long *ret) {
+	switch(num) {
+		case _SC_OPEN_MAX: {
+			struct rlimit ru;
+			if(int e = sys_getrlimit(RLIMIT_NOFILE, &ru); e) {
+				return e;
+			}
+			*ret = (ru.rlim_cur == RLIM_INFINITY) ? -1 : ru.rlim_cur;
+			break;
+		}
+		default: {
+			return EINVAL;
+		}
+	}
 
 	return 0;
 }

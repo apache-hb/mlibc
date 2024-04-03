@@ -8,6 +8,7 @@
 #include <bits/ensure.h>
 #include <abi-bits/fcntl.h>
 #include <abi-bits/socklen_t.h>
+#include <abi-bits/statx.h>
 #include <mlibc/allocator.hpp>
 #include <mlibc/debug.hpp>
 #include <mlibc/all-sysdeps.hpp>
@@ -19,7 +20,7 @@
 #define STUB_ONLY { __ensure(!"STUB_ONLY function was called"); __builtin_unreachable(); }
 #define UNUSED(x) (void)(x);
 
-#ifndef MLIBC_BUILDING_RTDL
+#ifndef MLIBC_BUILDING_RTLD
 extern "C" long __do_syscall_ret(unsigned long ret) {
 	if(ret > -4096UL) {
 		errno = -ret;
@@ -231,7 +232,7 @@ int sys_vm_unmap(void *pointer, size_t size) {
 }
 
 // All remaining functions are disabled in ldso.
-#ifndef MLIBC_BUILDING_RTDL
+#ifndef MLIBC_BUILDING_RTLD
 
 int sys_clock_get(int clock, time_t *secs, long *nanos) {
 	struct timespec tp = {};
@@ -266,6 +267,26 @@ int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags, struct stat
 #else
 	auto ret = do_cp_syscall(SYS_fstatat64, fd, path, statbuf, flags);
 #endif
+	if (int e = sc_error(ret); e) {
+		return e;
+	}
+
+#if defined(__i386__)
+	statbuf->st_atim.tv_sec = statbuf->__st_atim32.tv_sec;
+	statbuf->st_atim.tv_nsec = statbuf->__st_atim32.tv_nsec;
+	statbuf->st_mtim.tv_sec = statbuf->__st_mtim32.tv_sec;
+	statbuf->st_mtim.tv_nsec = statbuf->__st_mtim32.tv_nsec;
+	statbuf->st_ctim.tv_sec = statbuf->__st_ctim32.tv_sec;
+	statbuf->st_ctim.tv_nsec = statbuf->__st_ctim32.tv_nsec;
+#endif
+
+	return 0;
+}
+
+static_assert(sizeof(struct statx) == 0x100); // Linux kernel requires it to be precisely 256 bytes.
+
+int sys_statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *statxbuf) {
+	auto ret = do_cp_syscall(SYS_statx, dirfd, path, flags, mask, statxbuf);
 	if (int e = sc_error(ret); e)
 		return e;
 	return 0;
@@ -289,12 +310,12 @@ extern "C" void __mlibc_signal_restore(void);
 extern "C" void __mlibc_signal_restore_rt(void);
 
 int sys_sigaction(int signum, const struct sigaction *act,
-                struct sigaction *oldact) {
+		struct sigaction *oldact) {
 	struct ksigaction {
 		void (*handler)(int);
 		unsigned long flags;
 		void (*restorer)(void);
-		sigset_t mask;
+		uint32_t mask[2];
 	};
 
 	struct ksigaction kernel_act, kernel_oldact;
@@ -302,24 +323,24 @@ int sys_sigaction(int signum, const struct sigaction *act,
 		kernel_act.handler = act->sa_handler;
 		kernel_act.flags = act->sa_flags | SA_RESTORER;
 		kernel_act.restorer = (act->sa_flags & SA_SIGINFO) ? __mlibc_signal_restore_rt : __mlibc_signal_restore;
-		kernel_act.mask = act->sa_mask;
+		memcpy(&kernel_act.mask, &act->sa_mask, sizeof(kernel_act.mask));
 	}
 
-	static_assert(sizeof(sigset_t) == 8);
+	static_assert(sizeof(kernel_act.mask) == 8);
 
-        auto ret = do_syscall(SYS_rt_sigaction, signum, act ?
-			&kernel_act : NULL, oldact ?
-			&kernel_oldact : NULL, sizeof(sigset_t));
-        if (int e = sc_error(ret); e)
-                return e;
+	auto ret = do_syscall(SYS_rt_sigaction, signum, act ?
+		&kernel_act : NULL, oldact ?
+		&kernel_oldact : NULL, sizeof(kernel_act.mask));
+	if (int e = sc_error(ret); e)
+		return e;
 
 	if (oldact) {
 		oldact->sa_handler = kernel_oldact.handler;
 		oldact->sa_flags = kernel_oldact.flags;
 		oldact->sa_restorer = kernel_oldact.restorer;
-		oldact->sa_mask = kernel_oldact.mask;
+		memcpy(&oldact->sa_mask, &kernel_oldact.mask, sizeof(kernel_oldact.mask));
 	}
-        return 0;
+	return 0;
 }
 
 int sys_socket(int domain, int type, int protocol, int *fd) {
@@ -451,23 +472,23 @@ int sys_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 }
 
 int sys_pselect(int nfds, fd_set *readfds, fd_set *writefds,
-                fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask, int *num_events) {
-        // The Linux kernel really wants 7 arguments, even tho this is not supported
-        // To fix that issue, they use a struct as the last argument.
-        // See the man page of pselect and the glibc source code
-        struct {
-                sigset_t ss;
-                size_t ss_len;
-        } data;
-        data.ss = (uintptr_t)sigmask;
-        data.ss_len = NSIG / 8;
+		fd_set *exceptfds, const struct timespec *timeout, const sigset_t *sigmask, int *num_events) {
+	// The Linux kernel really wants 7 arguments, even tho this is not supported
+	// To fix that issue, they use a struct as the last argument.
+	// See the man page of pselect and the glibc source code
+	struct {
+		uint32_t ss[2];
+		size_t ss_len;
+	} data;
+	memcpy(&data.ss, sigmask, sizeof(data.ss));
+	data.ss_len = sizeof(data.ss);
 
-        auto ret = do_cp_syscall(SYS_pselect6, nfds, readfds, writefds,
-                        exceptfds, timeout, &data);
-        if (int e = sc_error(ret); e)
-                return e;
-        *num_events = sc_int_result<int>(ret);
-        return 0;
+	auto ret = do_cp_syscall(SYS_pselect6, nfds, readfds, writefds,
+			exceptfds, timeout, &data);
+	if (int e = sc_error(ret); e)
+		return e;
+	*num_events = sc_int_result<int>(ret);
+	return 0;
 }
 
 int sys_pipe(int *fds, int flags) {
@@ -1582,7 +1603,7 @@ void sys_exit(int status) {
 	__builtin_trap();
 }
 
-#endif // MLIBC_BUILDING_RTDL
+#endif // MLIBC_BUILDING_RTLD
 
 #define FUTEX_WAIT 0
 #define FUTEX_WAKE 1
@@ -1643,7 +1664,7 @@ int sys_mknodat(int dirfd, const char *path, int mode, int dev) {
 	return 0;
 }
 
-int sys_mkfifoat(int dirfd, const char *path, int mode) {
+int sys_mkfifoat(int dirfd, const char *path, mode_t mode) {
 	return sys_mknodat(dirfd, path, mode | S_IFIFO, 0);
 }
 
@@ -1721,14 +1742,14 @@ int sys_readlink(const char *path, void *buf, size_t bufsiz, ssize_t *len) {
 }
 
 int sys_getrlimit(int resource, struct rlimit *limit) {
-	auto ret = do_syscall(SYS_getrlimit, resource, limit);
+	auto ret = do_syscall(SYS_prlimit64, 0, resource, 0, limit);
 	if (int e = sc_error(ret); e)
 		return e;
 	return 0;
 }
 
 int sys_setrlimit(int resource, const struct rlimit *limit) {
-	auto ret = do_syscall(SYS_setrlimit, resource, limit);
+	auto ret = do_syscall(SYS_prlimit64, 0, resource, limit, 0);
 	if (int e = sc_error(ret); e)
 		return e;
 	return 0;

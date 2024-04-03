@@ -3,6 +3,11 @@
 #define _SYS_STAT_H
 
 #include <bits/posix/stat.h>
+#include <mlibc-config.h>
+
+#if __MLIBC_LINUX_OPTION
+#include <bits/linux/linux_stat.h>
+#endif /* !__MLIBC_LINUX_OPTION */
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,9 +19,11 @@ int chmod(const char *, mode_t);
 int fchmod(int, mode_t);
 int fchmodat(int, const char *, mode_t, int);
 int fstat(int fd, struct stat *result);
+int fstat64(int fd, struct stat64 *result);
 int fstatat(int, const char *__restrict, struct stat *__restrict, int);
 int futimens(int fd, const struct timespec times[2]);
 int lstat(const char *__restrict, struct stat *__restrict);
+int lstat64(const char *__restrict, struct stat64 *__restrict);
 int mkdir(const char *, mode_t);
 int mkdirat(int, const char *, mode_t);
 int mkfifo(const char *, mode_t);

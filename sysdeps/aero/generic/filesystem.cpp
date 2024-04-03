@@ -92,31 +92,24 @@ int sys_access(const char *filename, int mode) {
 
 int sys_stat(fsfd_target fsfdt, int fd, const char *path, int flags,
              struct stat *statbuf) {
-    auto result = 0;
-
     switch (fsfdt) {
-    case fsfd_target::path: {
-        result = syscall(SYS_STAT, path, strlen(path), statbuf);
+    case fsfd_target::path:
+        fd = AT_FDCWD;
         break;
-    }
-
-    case fsfd_target::fd: {
-        result = syscall(SYS_FSTAT, fd, statbuf);
+    case fsfd_target::fd:
+        flags |= AT_EMPTY_PATH;
+    
+    case fsfd_target::fd_path:
         break;
+
+    default:
+        __ensure(!"Invalid fsfd_target");
+        __builtin_unreachable();
     }
 
-    default: {
-        mlibc::infoLogger()
-            << "mlibc warning: sys_stat: unsupported fsfd target"
-            << frg::endlog;
-        return EINVAL;
-    }
-    }
-
-    if (result < 0) {
-        return -result;
-    }
-
+    auto ret = syscall(SYS_FSTAT, fd, path, strlen(path), flags, statbuf);
+    if(int e = sc_error(ret); e)
+        return e;
     return 0;
 }
 
@@ -382,7 +375,7 @@ int sys_poll(struct pollfd *fds, nfds_t count, int timeout, int *num_events) {
     return sys_ppoll(fds, count, &ts, NULL, num_events);
 }
 
-#ifndef MLIBC_BUILDING_RTDL
+#ifndef MLIBC_BUILDING_RTLD
 #include <stdio.h>
 int sys_ptsname(int fd, char *buffer, size_t length) {
     int index;
@@ -475,5 +468,5 @@ int sys_pselect(int num_fds, fd_set *read_set, fd_set *write_set,
     *num_events = m;
     return 0;
 }
-#endif // #ifndef MLIBC_BUILDING_RTDL
+#endif // #ifndef MLIBC_BUILDING_RTLD
 } // namespace mlibc

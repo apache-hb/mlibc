@@ -1,4 +1,4 @@
-rtdl_dso_sources += files(
+rtld_dso_sources += files(
 	'generic/aero.cpp',
 	'generic/filesystem.cpp',
 )
@@ -25,6 +25,7 @@ if not no_headers
 		'include/abi-bits/resource.h',
 		'include/abi-bits/signal.h',
 		'include/abi-bits/stat.h',
+		'include/abi-bits/statx.h',
 		'include/abi-bits/socket.h',
 		'include/abi-bits/termios.h',
 		'include/abi-bits/time.h',

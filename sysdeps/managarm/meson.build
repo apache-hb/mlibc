@@ -24,13 +24,13 @@ if not headers_only
 	rtdl_deps += [ hel_dep, helix_dep, bragi_dep ]
 endif
 
-rtdl_include_dirs += managarm_incl
-rtdl_sources += files(
+rtld_include_dirs += managarm_incl
+rtld_sources += files(
 	'generic/ensure.cpp',
 	'generic/memory.cpp',
-	'rtdl-generic/support.cpp',
+	'rtld-generic/support.cpp',
 )
-rtdl_sources += [
+rtld_sources += [
 	fs_bragi,
 	posix_bragi,
 ]
@@ -84,6 +84,7 @@ if not no_headers
 		'include/abi-bits/fcntl.h',
 		'include/abi-bits/in.h',
 		'include/abi-bits/stat.h',
+		'include/abi-bits/statx.h',
 		'include/abi-bits/signal.h',
 		'include/abi-bits/reboot.h',
 		'include/abi-bits/resource.h',

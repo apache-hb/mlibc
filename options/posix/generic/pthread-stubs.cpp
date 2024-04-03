@@ -47,7 +47,6 @@ private:
 #define SCOPE_TRACE() ScopeTrace(__FILE__, __LINE__, __FUNCTION__)
 
 static constexpr unsigned int mutexRecursive = 1;
-static constexpr unsigned int mutexErrorCheck = 2;
 
 // TODO: either use uint32_t or determine the bit based on sizeof(int).
 static constexpr unsigned int mutex_owner_mask = (static_cast<uint32_t>(1) << 30) - 1;
@@ -320,7 +319,7 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize, const cpu_set_t 
 }
 #endif // __MLIBC_LINUX_OPTION
 
-extern "C" Tcb *__rtdl_allocateTcb();
+extern "C" Tcb *__rtld_allocateTcb();
 
 // pthread functions.
 int pthread_create(pthread_t *__restrict thread, const pthread_attr_t *__restrict attrp,

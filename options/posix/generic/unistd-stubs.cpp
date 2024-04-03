@@ -279,6 +279,8 @@ int ftruncate(int fd, off_t size) {
 	return 0;
 }
 
+[[gnu::alias("ftruncate")]] int ftruncate64(int fd, off64_t size);
+
 char *getcwd(char *buffer, size_t size) {
 	if (buffer) {
 		if (size == 0) {
@@ -557,9 +559,14 @@ ssize_t readlink(const char *__restrict path, char *__restrict buffer, size_t ma
 	return length;
 }
 
-ssize_t readlinkat(int, const char *__restrict, char *__restrict, size_t) {
-	__ensure(!"Not implemented");
-	__builtin_unreachable();
+ssize_t readlinkat(int dirfd, const char *__restrict path, char *__restrict buffer, size_t max_size) {
+	ssize_t length;
+	MLIBC_CHECK_OR_ENOSYS(mlibc::sys_readlinkat, -1);
+	if(int e = mlibc::sys_readlinkat(dirfd, path, buffer, max_size, &length); e) {
+		errno = e;
+		return -1;
+	}
+	return length;
 }
 
 int rmdir(const char *path) {
@@ -759,6 +766,10 @@ long sysconf(int number) {
 		case _SC_HOST_NAME_MAX:
 			mlibc::infoLogger() << "\e[31mmlibc: sysconf(_SC_HOST_NAME_MAX) unconditionally returns fallback value 256\e[39m" << frg::endlog;
 			return 256;
+		case _SC_FSYNC:
+			return _POSIX_FSYNC;
+		case _SC_SAVED_IDS:
+			return _POSIX_SAVED_IDS;
 		default:
 			mlibc::infoLogger() << "\e[31mmlibc: sysconf() call is not implemented, number: " << number << "\e[39m" << frg::endlog;
 			errno = EINVAL;
@@ -782,6 +793,8 @@ int truncate(const char *, off_t) {
 	__ensure(!"Not implemented");
 	__builtin_unreachable();
 }
+
+[[gnu::alias("truncate")]] int truncate64(const char *, off64_t);
 
 char *ttyname(int fd) {
 	const size_t size = 128;

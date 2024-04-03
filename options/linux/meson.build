@@ -32,6 +32,7 @@ libc_sources += files(
 	'generic/cpuset.cpp',
 	'generic/sys-swap.cpp',
 	'generic/sys-statfs-stubs.cpp',
+	'generic/sys-statx.cpp',
 )
 
 if not no_headers
@@ -50,6 +51,7 @@ if not no_headers
 	install_headers(
 		'include/bits/linux/linux_unistd.h',
 		'include/bits/linux/linux_sched.h',
+		'include/bits/linux/linux_stat.h',
 		'include/bits/linux/cpu_set.h',
 		subdir: 'bits/linux'
 	)
