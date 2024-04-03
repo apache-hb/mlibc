@@ -1,6 +1,20 @@
 #ifndef _MLIBC_INTERNAL_TYPES_H
 #define _MLIBC_INTERNAL_TYPES_H
 
+#ifdef _MSC_VER
+#ifndef _M_AMD64
+#error "Only x86-64 is supported"
+#endif
+typedef signed char __mlibc_int8;
+typedef signed short __mlibc_int16;
+typedef signed int __mlibc_int32;
+typedef signed __int64 __mlibc_int64;
+
+typedef unsigned char __mlibc_uint8;
+typedef unsigned short __mlibc_uint16;
+typedef unsigned int __mlibc_uint32;
+typedef unsigned __int64 __mlibc_uint64;
+#else
 typedef __UINT8_TYPE__  __mlibc_uint8;
 typedef __UINT16_TYPE__ __mlibc_uint16;
 typedef __UINT32_TYPE__ __mlibc_uint32;
@@ -10,6 +24,7 @@ typedef __INT8_TYPE__  __mlibc_int8;
 typedef __INT16_TYPE__ __mlibc_int16;
 typedef __INT32_TYPE__ __mlibc_int32;
 typedef __INT64_TYPE__ __mlibc_int64;
+#endif
 
 // Clang and GCC have different mechanisms for INT32_C and friends.
 #ifdef __clang__
@@ -82,7 +97,7 @@ typedef __mlibc_int64 __mlibc_int_fast64;
 #define __MLIBC_INT_FAST64_MAX __MLIBC_INT64_MAX
 #define __MLIBC_INT_FAST64_MIN __MLIBC_INT64_MIN
 
-#elif defined (__x86_64__)
+#elif defined (__x86_64__) || defined(_M_AMD64)
 
 typedef __mlibc_int8 __mlibc_int_fast8;
 #define __MLIBC_INT_FAST8_C(x) __MLIBC_INT8_C(x)
@@ -176,7 +191,7 @@ typedef __mlibc_uint64 __mlibc_uint_fast64;
 #define __MLIBC_UINT_FAST64_MAX __MLIBC_UINT64_MAX
 #define __MLIBC_UINT_FAST64_MIN __MLIBC_UINT64_MIN
 
-#elif defined (__x86_64__)
+#elif defined (__x86_64__) || defined(_M_AMD64)
 
 typedef __mlibc_uint8 __mlibc_uint_fast8;
 #define __MLIBC_UINT_FAST8_C(x) __MLIBC_UINT8_C(x)

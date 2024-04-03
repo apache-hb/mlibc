@@ -1,4 +1,13 @@
-project('mlibc', default_options: ['warning_level=2', 'cpp_std=c++20'])
+project('mlibc',
+	license : 'MIT',
+	license_files : 'LICENSE',
+	default_options: [
+		'cpp_eh=none',
+		'cpp_rtti=false',
+		'warning_level=2',
+		'cpp_std=c++20'
+	]
+)
 
 fs = import('fs')
 
@@ -67,11 +76,25 @@ if not headers_only
 	c_compiler = meson.get_compiler('c')
 	cpp_compiler = meson.get_compiler('cpp')
 
-	add_project_arguments('-Wno-unused-function', '-D__MLIBC_BUILDING_MLIBC', language: ['c', 'cpp'])
-	add_project_arguments('-nostdinc', '-fno-builtin', '-ffreestanding', language: ['c', 'cpp'])
-	add_project_arguments('-Werror=misleading-indentation', language: ['c', 'cpp'])
-	add_project_arguments('-fno-rtti', '-fno-exceptions', language: 'cpp')
-	add_project_link_arguments('-nostdlib', language: ['c', 'cpp'])
+	if host_machine.system() == 'windows'
+		add_languages('masm')
+	endif
+
+	shared_compile_args = [
+		'-D__MLIBC_BUILDING_MLIBC',
+		'/X',
+		'-nostdinc', '-fno-builtin', '-ffreestanding',
+	]
+
+	shared_link_args = [
+		'-nostdlib',
+		'/NODEFAULTLIB',
+		'/Zl'
+	]
+
+	add_project_arguments(c_compiler.get_supported_arguments(shared_compile_args), language: 'c')
+	add_project_arguments(cpp_compiler.get_supported_arguments(shared_compile_args), language: 'cpp')
+	add_project_link_arguments(c_compiler.get_supported_link_arguments(shared_link_args), language: [ 'c', 'cpp' ])
 
 	if not cshim_dep.found()
 		searchdirs = run_command(c_compiler.cmd_array(), '-print-search-dirs',
@@ -248,6 +271,10 @@ elif host_machine.system() == 'dripos'
 	rtld_include_dirs += include_directories('sysdeps/dripos/include')
 	libc_include_dirs += include_directories('sysdeps/dripos/include')
 	subdir('sysdeps/dripos')
+elif host_machine.system() == 'windows'
+	rtdl_include_dirs += include_directories('sysdeps/windows/include')
+	libc_include_dirs += include_directories('sysdeps/windows/include')
+	subdir('sysdeps/windows')
 else
 	error('No sysdeps defined for OS: ' + host_machine.system())
 endif
@@ -332,6 +359,9 @@ configure_file(input: 'mlibc-config.h.in',
 	install: not no_headers,
 	install_dir: get_option('includedir'))
 
+dso_src_dir = (host_machine.system() == 'windows') ? 'windows' : 'generic'
+asm_ext = (host_machine.system() == 'windows') ? 'masm' : 'S'
+
 internal_sources = [
 	'options/internal/generic/allocator.cpp',
 	'options/internal/generic/charcode.cpp',
@@ -351,13 +381,13 @@ internal_sources = [
 	'options/internal/gcc/guard-abi.cpp',
 	'options/internal/gcc/initfini.cpp',
 	'options/internal/gcc-extra/cxxabi.cpp',
-	'options/internal' / host_machine.cpu_family() / 'setjmp.S',
-	'options/internal' / host_machine.cpu_family() / 'fenv.S',
+	'options/internal' / host_machine.cpu_family() / dso_src_dir / 'setjmp.' + asm_ext,
+	'options/internal' / host_machine.cpu_family() / dso_src_dir / 'fenv.' + asm_ext,
 ]
 
 internal_dso_sources = [
-	'options/internal' / host_machine.cpu_family() / 'mlibc_crtbegin.S',
-	'options/internal' / host_machine.cpu_family() / 'mlibc_crtend.S',
+	'options/internal' / host_machine.cpu_family() / dso_src_dir / 'mlibc_crtbegin.' + asm_ext,
+	'options/internal' / host_machine.cpu_family() / dso_src_dir / 'mlibc_crtend.' + asm_ext,
 ]
 
 if not no_headers
@@ -397,12 +427,21 @@ rtld_sources += [
 	'options/internal/generic/inline-emitter.cpp',
 	'options/internal/generic/frigg.cpp',
 	'options/internal/generic/ubsan.cpp',
+<<<<<<< Updated upstream
 	'options/rtld/generic/main.cpp',
 	'options/rtld/generic/linker.cpp',
 	'options/rtld' / host_machine.cpu_family() / 'runtime.S'
 ]
 
 rtld_dso_sources += ['options/rtld' / host_machine.cpu_family() / 'entry.S']
+=======
+	'options/rtdl/generic/main.cpp',
+	'options/rtdl/generic/linker.cpp'
+]
+
+rtdl_runtime = files('options/rtdl' / host_machine.cpu_family() / dso_src_dir / 'runtime.' + asm_ext)
+rtdl_dso_entry = files('options/rtdl' / host_machine.cpu_family() / dso_src_dir / 'entry.' + asm_ext)
+>>>>>>> Stashed changes
 
 subdir('options/elf')
 subdir('options/ansi')
@@ -414,6 +453,9 @@ subdir('options/iconv')
 subdir('options/intl')
 subdir('options/crypt')
 subdir('options/bsd')
+
+rtdl_sources + rtdl_runtime
+rtdl_dso_sources += rtdl_dso_entry
 
 rtlib_deps = []
 

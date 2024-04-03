@@ -380,4 +380,3 @@ int finitef(float x);
 #endif
 
 #endif // _MATH_H
-
